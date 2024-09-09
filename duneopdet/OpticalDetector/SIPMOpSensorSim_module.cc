@@ -92,7 +92,9 @@ namespace opdet {
 
     // The parameters read from the FHiCL file
     art::InputTag fInputTag;            // Input tag for OpDet collection
-    art::ProductToken< std::vector<sim::OpDetBacktrackerRecord> > fInputToken;
+
+   // art::ProductToken< std::vector<sim::OpDetBacktrackerRecord> > fInputToken;
+    art::ProductToken< std::vector<sim::SimPhotons> > fInputToken;
     double        fQE;
     double        fDarkNoiseRate;	      // In Hz
     double        fCrossTalk;           // Probability of SiPM producing 2 PE signal
@@ -113,7 +115,8 @@ namespace opdet {
   
     // Produce waveform on one of the optical detectors
     // These cannot be const due to the random number generators
-    void PhotonsToPE(sim::OpDetBacktrackerRecord const& btr, sim::OpDetDivRec& dr_plusnoise);
+    void PhotonsToPE(sim::SimPhotons const& btr, sim::OpDetDivRec& dr_plusnoise);
+   // void PhotonsToPE(sim::OpDetBacktrackerRecord const& btr, sim::OpDetDivRec& dr_plusnoise);
     void AddDarkNoise(sim::OpDetDivRec &);
     unsigned short CrossTalk();
 
@@ -137,7 +140,10 @@ namespace opdet {
   SIPMOpSensorSim::SIPMOpSensorSim(Parameters const & config)
     : art::EDProducer{config}
     , fInputTag{     config().InputTag()}
-    , fInputToken{   consumes< std::vector<sim::OpDetBacktrackerRecord> >(fInputTag) }
+    , 
+
+fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) }
+//fInputToken{   consumes< std::vector<sim::OpDetBacktrackerRecord> >(fInputTag) }
     , fDarkNoiseRate{config().DarkNoiseRate()}
     , fCrossTalk{    config().CrossTalk()}
     , fSIPMEngine(
@@ -239,8 +245,8 @@ namespace opdet {
 
     // For every optical detector:
     for (auto const& btr : *btr_handle) {
-      int opDet = btr.OpDetNum();
-
+    //  int opDet = btr.OpDetNum();
+	int opDet = btr.OpChannel();
       auto DivRecPlusNoise = sim::OpDetDivRec(opDet);
 
       PhotonsToPE(btr, DivRecPlusNoise);
@@ -257,7 +263,14 @@ namespace opdet {
   }
 
   //---------------------------------------------------------------------------
-  void SIPMOpSensorSim::PhotonsToPE(sim::OpDetBacktrackerRecord const& btr,
+ 
+    sim::OnePhoton photon;
+
+    // Access the Time member
+    double photonTime = photon.Time;
+
+ void SIPMOpSensorSim::PhotonsToPE(sim::SimPhotons const& btr,
+//void SIPMOpSensorSim::PhotonsToPE(sim::OpDetBacktrackerRecord const& btr,
                                     sim::OpDetDivRec& dr_plusnoise)
   {
     // Don't do anything without any records
@@ -295,7 +308,8 @@ namespace opdet {
           unsigned int PE = 1+CrossTalk();
           for(unsigned int i = 0; i < PE; i++) {
             // Add to collection
-            dr_plusnoise.AddPhoton(btr.OpDetNum(), // Channel
+            dr_plusnoise.AddPhoton(btr.OpChannel(), // Channel
+           // dr_plusnoise.AddPhoton(btr.OpDetNum(), // Channel
                                    sdp.trackID,    // TrackID
                                    time);          // Time
           }
@@ -325,7 +339,9 @@ namespace opdet {
 	    //Currently using all zeros as an indicator of Dark Noise for the trackID.
       int PE = 1+CrossTalk();
       for(int j = 0; j < PE; j++) {
-        dr_plusnoise.AddPhoton(dr_plusnoise.OpDetNum(), 0, darkNoiseTime);
+	     
+   dr_plusnoise.AddPhoton(dr_plusnoise.OpChannel(), 0, darkNoiseTime);
+  // dr_plusnoise.AddPhoton(dr_plusnoise.OpDetNum(), 0, darkNoiseTime);
       }
 
       // Find next time to simulate a single PE pulse
