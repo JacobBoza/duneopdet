@@ -94,7 +94,17 @@ namespace opdet {
     art::InputTag fInputTag;            // Input tag for OpDet collection
 
    // art::ProductToken< std::vector<sim::OpDetBacktrackerRecord> > fInputToken;
-    art::ProductToken< std::vector<sim::SimPhotons> > fInputToken;
+//art::ProductToken< std::vector< art::Handle< std::vector< sim::SimPhotons > > > > fInputToken;
+  
+
+//art::ProductToken<evt.getMany<std::vector<sim::SimPhotons>>()> fInputToken;
+
+
+
+//art::ProductToken< art::Handle< std::vector< sim::SimPhotons > > > fInputToken;
+
+//   art::ProductToken< sim::SimPhotons > fInputToken;
+   art::ProductToken< std::vector<sim::SimPhotons> > fInputToken;
     double        fQE;
     double        fDarkNoiseRate;	      // In Hz
     double        fCrossTalk;           // Probability of SiPM producing 2 PE signal
@@ -115,7 +125,7 @@ namespace opdet {
   
     // Produce waveform on one of the optical detectors
     // These cannot be const due to the random number generators
-    void PhotonsToPE(sim::SimPhotons const& btr, sim::OpDetDivRec& dr_plusnoise);
+    void PhotonsToPE(sim::SimPhotons const& btr, sim::OpDetDivRec& dr_plusnoise, art::Event& evt);
    // void PhotonsToPE(sim::OpDetBacktrackerRecord const& btr, sim::OpDetDivRec& dr_plusnoise);
     void AddDarkNoise(sim::OpDetDivRec &);
     unsigned short CrossTalk();
@@ -141,8 +151,14 @@ namespace opdet {
     : art::EDProducer{config}
     , fInputTag{     config().InputTag()}
     , 
+//fInputToken{   consumer<evt.getMany<std::vector<sim::SimPhotons>>()>(fInputTag)   }
+//fInputToken{   consumes< std::vector< art::Handle< std::vector< sim::SimPhotons > > > >(fInputTag) }
+fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles with this one
 
-fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) }
+
+
+
+//fInputToken{   consumes< sim::SimPhotons >(fInputTag) }
 //fInputToken{   consumes< std::vector<sim::OpDetBacktrackerRecord> >(fInputTag) }
     , fDarkNoiseRate{config().DarkNoiseRate()}
     , fCrossTalk{    config().CrossTalk()}
@@ -180,7 +196,7 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) }
 
     // Correct out the prescaling applied during simulation
     auto const *LarProp = lar::providerFrom<detinfo::LArPropertiesService>();
-    fQE = tempQE / LarProp->ScintPreScale();
+    fQE = tempQE / LarProp->ScintPreScale() - 1; // Fix fQE -- added -1
 
     if (fQE > 1.0001 ) {
       throw art::Exception(art::errors::Configuration)
@@ -249,8 +265,9 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) }
 	int opDet = btr.OpChannel();
       auto DivRecPlusNoise = sim::OpDetDivRec(opDet);
 
-      PhotonsToPE(btr, DivRecPlusNoise);
-
+      PhotonsToPE(btr, DivRecPlusNoise, event);
+    // sim::OnePhoton photon;
+    // double time = photon.Time;
       // Generate dark noise
       if (fDarkNoiseRate > 0.0) AddDarkNoise(DivRecPlusNoise);
 
@@ -263,40 +280,93 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) }
   }
 
   //---------------------------------------------------------------------------
- 
-    sim::OnePhoton photon;
 
-    // Access the Time member
-    double photonTime = photon.Time;
 
  void SIPMOpSensorSim::PhotonsToPE(sim::SimPhotons const& btr,
 //void SIPMOpSensorSim::PhotonsToPE(sim::OpDetBacktrackerRecord const& btr,
-                                    sim::OpDetDivRec& dr_plusnoise)
+                                    sim::OpDetDivRec& dr_plusnoise, art::Event& evt)
   {
-    // Don't do anything without any records
-    if (btr.timePDclockSDPsMap().size() == 0)
-      return;
 
-    // Get the earliest time in the BTR
-    double firstTime = btr.timePDclockSDPsMap()[0].first;
+    // Don't do anything without any records
+   /* if (btr.timePDclockSDPsMap().size() == 0)
+      return;
+*/
+//art::EventNumber_t event = evt.id().event();
+   // sim::OnePhoton photon;
+   // double time = photon.Time;
+   // auto photon_handles = evt.getMany<sim::SimPhotons>();   
+    auto photon_handles = evt.getMany<std::vector<sim::SimPhotons>>();   
+    art::ServiceHandle<opdet::OpDetResponseInterface const> odresponse;
+    if (photon_handles.size() == 0)
+        throw art::Exception(art::errors::ProductNotFound)
+          << "sim SimPhotons retrieved and you requested them.";
+
+    for (auto const& ph_handle : photon_handles) {
+          // Do some checking before we proceed
+          if (!ph_handle.isValid()) continue;
+
+          if ((*ph_handle).size() > 0) {
+              for (auto const& itOpDet : (*ph_handle)) {
+              //Reset Counters
+              int fCountOpDetDetected = 0;
+              //Reset t0 for visible light
+            //  fT0_vis = 999.;
+      //Need to take all detected photons and add the detected photons to OpDetDivRec         
+              //Get data from HitCollection entry
+              int fOpChannel = itOpDet.OpChannel();
+              const sim::SimPhotons& TheHit = itOpDet;
+                  
+          for (const sim::OnePhoton& Phot : TheHit) {
+		if (odresponse->detected(fOpChannel, Phot)) ++fCountOpDetDetected;
+        }
+      
+         int nphot = fRandPoissPhot.fire(fQE * (double)fCountOpDetDetected);
+        for(int truePh=0; truePh<nphot; ++truePh) {
+	  const sim::OnePhoton& Phot = TheHit[nphot];
+          // Determine actual PE with Cross Talk
+          unsigned int PE = 1+CrossTalk();
+          for(unsigned int i = 0; i < PE; i++) {
+            // Add to collection
+            dr_plusnoise.AddPhoton(btr.OpChannel(), // Channel
+                                   Phot.MotherTrackID,    // TrackID
+                                   Phot.Time);          // Time
+          }
+       }
+      }
+     }
+    }
+
+
+
+     
+
+
+ // Get the earliest time in the BTR
+  /*  double firstTime = btr.timePDclockSDPsMap()[0].first;
     if (fCorrectLateLight) {
       for (auto time_sdps : btr.timePDclockSDPsMap()) {
         double time = btr.timePDclockSDPsMap()[0].first;
         if (time < firstTime) firstTime = time;
       }
-    }
+    }*/
 
     // Loop through times in vector< pair< arrival time (in ns), vector< SDP > > >
-    for (auto const& [time, sdps]: btr.timePDclockSDPsMap()) {
+   /* for (auto const& [time, sdps]: btr.timePDclockSDPsMap()) {
 
       double lateScale = 1.;
       if (fCorrectLateLight) {
         if (time > firstTime + fLateLightBoundary)
           lateScale = fLateLightCorrection;
       }
+*/
+    
 
-      // Loop through SDPs
-      for(auto const& sdp : sdps) {
+
+
+
+
+  // Loop through SDPs
+/*      for(auto const& sdp : sdps) {
 
         // Reduce true photons by QE, poisson-fluctuate
         int nphot = fRandPoissPhot.fire(fQE * (double)sdp.numPhotons * lateScale);
@@ -314,8 +384,8 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) }
                                    time);          // Time
           }
         }
-      }
-    }
+      }*/
+   // }
   }
 
   //---------------------------------------------------------------------------
@@ -340,7 +410,7 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) }
       int PE = 1+CrossTalk();
       for(int j = 0; j < PE; j++) {
 	     
-   dr_plusnoise.AddPhoton(dr_plusnoise.OpChannel(), 0, darkNoiseTime);
+   dr_plusnoise.AddPhoton(dr_plusnoise.OpDetNum(), 0, darkNoiseTime);
   // dr_plusnoise.AddPhoton(dr_plusnoise.OpDetNum(), 0, darkNoiseTime);
       }
 
