@@ -92,7 +92,7 @@ namespace opdet {
 
     // The parameters read from the FHiCL file
     art::InputTag fInputTag;            // Input tag for OpDet collection
-
+    std::vector < std::string > fInputModule;
    // art::ProductToken< std::vector<sim::OpDetBacktrackerRecord> > fInputToken;
 //art::ProductToken< std::vector< art::Handle< std::vector< sim::SimPhotons > > > > fInputToken;
   
@@ -104,7 +104,14 @@ namespace opdet {
 //art::ProductToken< art::Handle< std::vector< sim::SimPhotons > > > fInputToken;
 
 //   art::ProductToken< sim::SimPhotons > fInputToken;
-   art::ProductToken< std::vector<sim::SimPhotons> > fInputToken;
+    art::ProductToken< std::vector<sim::SimPhotons> > fInputToken;
+    art::Handle< std::vector< sim::SimPhotons > > PhotonHandle;
+    
+
+
+
+
+
     double        fQE;
     double        fDarkNoiseRate;	      // In Hz
     double        fCrossTalk;           // Probability of SiPM producing 2 PE signal
@@ -154,6 +161,10 @@ namespace opdet {
 //fInputToken{   consumer<evt.getMany<std::vector<sim::SimPhotons>>()>(fInputTag)   }
 //fInputToken{   consumes< std::vector< art::Handle< std::vector< sim::SimPhotons > > > >(fInputTag) }
 fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles with this one
+
+
+
+
 
 
 

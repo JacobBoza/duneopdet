@@ -3,7 +3,8 @@ BEGIN_PROLOG
 xarapuca_ar: 
 {
   module_type:       "SIPMOpSensorSim"
-  InputTag:          "PDFastSim"
+  InputTag:          "largeant"
+ # InputModule:       "largeant"
   QuantumEfficiency: 0.030 # 3% X-ARAPUCA efficiency
   DarkNoiseRate:     10.0 # Hz
   CrossTalk:         0.20
