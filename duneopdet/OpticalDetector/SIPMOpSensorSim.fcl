@@ -5,7 +5,7 @@ xarapuca_ar:
   module_type:       "SIPMOpSensorSim"
   InputTag:          "largeant"
  # InputModule:       "largeant"
-  QuantumEfficiency: 0.030 # 3% X-ARAPUCA efficiency
+  QuantumEfficiency: 0.0287 # 2.87% X-ARAPUCA efficiency
   DarkNoiseRate:     10.0 # Hz
   CrossTalk:         0.20
 }

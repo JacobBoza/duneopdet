@@ -1,7 +1,7 @@
 //=========================================================
 // SIPMOpSensorSim_module.cc
 // This module produces detected photons (creating OpDetDivRec)
-// from photon detectors taking OpDetBacktrackerRecords as input.
+// from photon detectors taking SimPhotons as input.
 // Applies quantum efficiency and cross-talk
 //
 // Gleb Sinev, Duke, 2015
@@ -74,7 +74,7 @@ namespace opdet {
     struct Config {
       using Name = fhicl::Name;
       using Comment = fhicl::Comment;
-      fhicl::Atom<art::InputTag>  InputTag            { Name("InputTag"),            Comment("Input tag for OpDetBacktrackerRecords") };
+      fhicl::Atom<art::InputTag>  InputTag            { Name("InputTag"),            Comment("Input tag for SimPhotons") };
       fhicl::Atom<double>         QuantumEfficiency   { Name("QuantumEfficiency"),   Comment("Probabilityof recording a photon") };
       fhicl::Atom<double>         DarkNoiseRate       { Name("DarkNoiseRate"),       Comment("Rate in Hz") };
       fhicl::Atom<double>         CrossTalk           { Name("CrossTalk"),           Comment("Cross talk (1->2 PE) probability") };
@@ -93,21 +93,8 @@ namespace opdet {
     // The parameters read from the FHiCL file
     art::InputTag fInputTag;            // Input tag for OpDet collection
     std::vector < std::string > fInputModule;
-   // art::ProductToken< std::vector<sim::OpDetBacktrackerRecord> > fInputToken;
-//art::ProductToken< std::vector< art::Handle< std::vector< sim::SimPhotons > > > > fInputToken;
-  
-
-//art::ProductToken<evt.getMany<std::vector<sim::SimPhotons>>()> fInputToken;
-
-
-
-//art::ProductToken< art::Handle< std::vector< sim::SimPhotons > > > fInputToken;
-
-//   art::ProductToken< sim::SimPhotons > fInputToken;
     art::ProductToken< std::vector<sim::SimPhotons> > fInputToken;
     art::Handle< std::vector< sim::SimPhotons > > PhotonHandle;
-    
-
 
 
 
@@ -119,7 +106,6 @@ namespace opdet {
     double        fTimeBegin;           // Earliest and latest possible times for reading out data
     double        fTimeEnd;             // Used for defining the dark noise range
 
-    // unused double        fCorrection;          // Correct light yield. Kept separate for clarity
     bool          fCorrectLateLight;    // Do we apply a late light correction?
     double        fLateLightCorrection; // How much to correct the late light
     double        fLateLightBoundary;   // What is the boundary which defines late light?
@@ -132,8 +118,7 @@ namespace opdet {
   
     // Produce waveform on one of the optical detectors
     // These cannot be const due to the random number generators
-    void PhotonsToPE(sim::SimPhotons const& btr, sim::OpDetDivRec& dr_plusnoise, art::Event& evt);
-   // void PhotonsToPE(sim::OpDetBacktrackerRecord const& btr, sim::OpDetDivRec& dr_plusnoise);
+    void PhotonsToPE(sim::SimPhotons const& simPh, sim::OpDetDivRec& dr_plusnoise, art::Event& evt);
     void AddDarkNoise(sim::OpDetDivRec &);
     unsigned short CrossTalk();
 
@@ -158,19 +143,7 @@ namespace opdet {
     : art::EDProducer{config}
     , fInputTag{     config().InputTag()}
     , 
-//fInputToken{   consumer<evt.getMany<std::vector<sim::SimPhotons>>()>(fInputTag)   }
-//fInputToken{   consumes< std::vector< art::Handle< std::vector< sim::SimPhotons > > > >(fInputTag) }
 fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles with this one
-
-
-
-
-
-
-
-
-//fInputToken{   consumes< sim::SimPhotons >(fInputTag) }
-//fInputToken{   consumes< std::vector<sim::OpDetBacktrackerRecord> >(fInputTag) }
     , fDarkNoiseRate{config().DarkNoiseRate()}
     , fCrossTalk{    config().CrossTalk()}
     , fSIPMEngine(
@@ -207,7 +180,7 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles 
 
     // Correct out the prescaling applied during simulation
     auto const *LarProp = lar::providerFrom<detinfo::LArPropertiesService>();
-    fQE = tempQE / LarProp->ScintPreScale() - 1; // Fix fQE -- added -1
+    fQE = tempQE / LarProp->ScintPreScale();
 
     if (fQE > 1.0001 ) {
       throw art::Exception(art::errors::Configuration)
@@ -221,15 +194,6 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles 
 
     //This will be handled on the WaveformDigitizerSim_module.cc 
     // Check for non-trivial channel mapping which is not supported
-/*    art::ServiceHandle< geo::Geometry > geometry;
-    for (unsigned int opDet = 0; opDet < geometry->NOpDets() ; ++opDet) {
-      if (geometry->NOpHardwareChannels(opDet) > 1)
-        throw art::Exception(art::errors::Configuration)
-          << "OpDet #" << opDet << " has " << geometry->NOpHardwareChannels(opDet) 
-          << " channels associated with it. \n"
-          << "This kind of channel mapping is not supported by SIPMOpSensorSim.\n"
-          << "You need to use the legacy OpDetDigitizerDUNE instead.\n";
-    }*/
 
     // Set time ranges if needed for dark noise
     if (fDarkNoiseRate > 0) SetBeginEndTimes();
@@ -268,15 +232,14 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles 
     auto OpDetDivRecPtr = std::make_unique< std::vector< sim::OpDetDivRec > >();
 
     // Get OpDetBacktrackerRecord from the event
-    auto const & btr_handle = event.getValidHandle(fInputToken);
+    auto const & simph_handle = event.getValidHandle(fInputToken);
 
     // For every optical detector:
-    for (auto const& btr : *btr_handle) {
-    //  int opDet = btr.OpDetNum();
-	int opDet = btr.OpChannel();
+    for (auto const& simph : *simph_handle) {
+	int opDet = simph.OpChannel();
       auto DivRecPlusNoise = sim::OpDetDivRec(opDet);
 
-      PhotonsToPE(btr, DivRecPlusNoise, event);
+      PhotonsToPE(simph, DivRecPlusNoise, event);
     // sim::OnePhoton photon;
     // double time = photon.Time;
       // Generate dark noise
@@ -293,19 +256,10 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles 
   //---------------------------------------------------------------------------
 
 
- void SIPMOpSensorSim::PhotonsToPE(sim::SimPhotons const& btr,
-//void SIPMOpSensorSim::PhotonsToPE(sim::OpDetBacktrackerRecord const& btr,
-                                    sim::OpDetDivRec& dr_plusnoise, art::Event& evt)
+ void SIPMOpSensorSim::PhotonsToPE(sim::SimPhotons const& simph, sim::OpDetDivRec& dr_plusnoise, art::Event& evt)
   {
 
     // Don't do anything without any records
-   /* if (btr.timePDclockSDPsMap().size() == 0)
-      return;
-*/
-//art::EventNumber_t event = evt.id().event();
-   // sim::OnePhoton photon;
-   // double time = photon.Time;
-   // auto photon_handles = evt.getMany<sim::SimPhotons>();   
     auto photon_handles = evt.getMany<std::vector<sim::SimPhotons>>();   
     art::ServiceHandle<opdet::OpDetResponseInterface const> odresponse;
     if (photon_handles.size() == 0)
@@ -338,7 +292,7 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles 
           unsigned int PE = 1+CrossTalk();
           for(unsigned int i = 0; i < PE; i++) {
             // Add to collection
-            dr_plusnoise.AddPhoton(btr.OpChannel(), // Channel
+            dr_plusnoise.AddPhoton(simph.OpChannel(), // Channel
                                    Phot.MotherTrackID,    // TrackID
                                    Phot.Time);          // Time
           }
@@ -346,57 +300,6 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles 
       }
      }
     }
-
-
-
-     
-
-
- // Get the earliest time in the BTR
-  /*  double firstTime = btr.timePDclockSDPsMap()[0].first;
-    if (fCorrectLateLight) {
-      for (auto time_sdps : btr.timePDclockSDPsMap()) {
-        double time = btr.timePDclockSDPsMap()[0].first;
-        if (time < firstTime) firstTime = time;
-      }
-    }*/
-
-    // Loop through times in vector< pair< arrival time (in ns), vector< SDP > > >
-   /* for (auto const& [time, sdps]: btr.timePDclockSDPsMap()) {
-
-      double lateScale = 1.;
-      if (fCorrectLateLight) {
-        if (time > firstTime + fLateLightBoundary)
-          lateScale = fLateLightCorrection;
-      }
-*/
-    
-
-
-
-
-
-  // Loop through SDPs
-/*      for(auto const& sdp : sdps) {
-
-        // Reduce true photons by QE, poisson-fluctuate
-        int nphot = fRandPoissPhot.fire(fQE * (double)sdp.numPhotons * lateScale);
-
-        // For each true photon detected
-        for(int truePh=0; truePh<nphot; ++truePh) {
-
-          // Determine actual PE with Cross Talk
-          unsigned int PE = 1+CrossTalk();
-          for(unsigned int i = 0; i < PE; i++) {
-            // Add to collection
-            dr_plusnoise.AddPhoton(btr.OpChannel(), // Channel
-           // dr_plusnoise.AddPhoton(btr.OpDetNum(), // Channel
-                                   sdp.trackID,    // TrackID
-                                   time);          // Time
-          }
-        }
-      }*/
-   // }
   }
 
   //---------------------------------------------------------------------------
@@ -422,7 +325,6 @@ fInputToken{   consumes< std::vector<sim::SimPhotons> >(fInputTag) } //compiles 
       for(int j = 0; j < PE; j++) {
 	     
    dr_plusnoise.AddPhoton(dr_plusnoise.OpDetNum(), 0, darkNoiseTime);
-  // dr_plusnoise.AddPhoton(dr_plusnoise.OpDetNum(), 0, darkNoiseTime);
       }
 
       // Find next time to simulate a single PE pulse
