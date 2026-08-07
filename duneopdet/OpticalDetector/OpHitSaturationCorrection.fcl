@@ -1,0 +1,24 @@
+BEGIN_PROLOG
+
+ophit_saturation_correction:
+{
+  module_type:               "OpHitSaturationCorrection"
+  OpHitModuleLabel:          "ophit" 
+  IgnoreChannels:            []
+  #calibThrs: to be set     //Value at which the calibration curve was evaluated
+  #channelVec: to be set       
+  #calibParam1: to be set
+  #calibParam2: to be set
+  #calibParam3: to be set
+}
+
+protodunevd_ophit_saturation_correction: @local::ophit_saturation_correction
+protodunevd_ophit_saturation_correction.IgnoreChannels: [2010, 2011, 2020, 2021, 2030, 2031, 2040, 2041, 3010, 3020, 3030, 3040, 3050, 3060, 3070, 3080, 3090, 3100, 3110, 3120, 3130, 3140, 3150, 3160, 3170, 3180, 3190, 3200, 3210, 3220, 3230, 3240] //All top membrane and PMTs
+#Obtained from Maressa's work here: https://indico.fnal.gov/event/74741/contributions/342609/attachments/198490/276375/Jun_ToTUpdate_PDVD.pdf
+protodunevd_ophit_saturation_correction.calibThrs: 9000
+protodunevd_ophit_saturation_correction.channelVec:[ 1020, 1021, 1060, 1061, 1010, 1011, 1050, 1051, 1030, 1031, 1070, 1071, 1040, 1041, 1080, 1081, 1020, 1021, 1060, 1061, 1010, 1011, 1050, 1051, 1030, 1031, 1070, 1071, 1040, 1041, 1080, 1081 ]
+protodunevd_ophit_saturation_correction.calibParam1: [ 18030.2, 20412.9, 5283.25, 10205.8, 13470.5, 14846.5, 61464.7, 114531, 28314.9, 19179.3, 3515.41, 1922.72, 41122.9, 19625.1, 3736.39, 2721.95, 18030.2, 20412.9, 5283.25, 10205.8, 13470.5, 14846.5, 61464.7, 114531, 28314.9, 19179.3, 3515.41, 1922.72, 41122.9, 19625.1, 3736.39, 2721.95 ]
+protodunevd_ophit_saturation_correction.calibParam2: [ 2.35102, 2.38907, 1.86604, 2.0876, 2.18026, 2.20616, 2.88896, 3.06963, 2.49177, 2.37682, 1.74349, 1.38467, 2.66441, 2.32059, 1.76064, 1.59827, 2.35102, 2.38907, 1.86604, 2.0876, 2.18026, 2.20616, 2.88896, 3.06963, 2.49177, 2.37682, 1.74349, 1.38467, 2.66441, 2.32059, 1.76064, 1.59827 ]
+protodunevd_ophit_saturation_correction.calibParam3: [ -2.75187, -3.3376, -1.09446, -1.92932, -2.51426, -2.78077, -5.4202, -6.65422, -3.47335, -2.96951, -0.771028, -0.0797538, -4.17353, -3.10522, -0.759761, -0.120253, -2.75187, -3.3376, -1.09446, -1.92932, -2.51426, -2.78077, -5.4202, -6.65422, -3.47335, -2.96951, -0.771028, -0.0797538, -4.17353, -3.10522, -0.759761, -0.120253 ]
+
+END_PROLOG
